@@ -1,0 +1,16 @@
+#the R files
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+#folders
+code/XX*
+data/
+files/
+output/
+writing/
+
+#randoms
+desktop.ini
+.dropbox
