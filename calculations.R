@@ -35,7 +35,7 @@ datadir<-file.path(
 
 #LOAD DATA
 
-#wages
+#unskilled wages
 #https://www.measuringworth.com/datasets/uswage/
 setwd(datadir); dir()
 wagesdf<-fread('USWAGE_1774-2022.csv')
@@ -67,7 +67,7 @@ wagesdf<-rbind.fill(
 )
 ggplot(wagesdf[wagesdf$year<1776,],aes(x=year,y=pworker_wage)) + geom_line()
 
-#slavepop
+#slave population, 1619-1865
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7716878/
 setwd(datadir); dir()
 require(rvest)
@@ -97,33 +97,6 @@ slavedf<-slavedf[order(slavedf$year),]
 slavedf$slavepop<-na.approx(slavedf$slavepop,na.rm=F)
 slavedf$slavepop_wage <- slavedf$slavepop *
   (1 - 0.1669) #craemer (2015) says 16.69% are below 5 years of age
-
-# #https://www-statista-com.ezp-prod1.hul.harvard.edu/statistics/1010169/black-and-slave-population-us-1790-1880/
-# setwd(datadir); dir()
-# slavedf<-fread('slavepop.csv',skip=3)
-# names(slavedf)<-c('year','totalpop','slavepop','freepop')
-# newrow<-data.frame(
-#   year=1776,
-#   slavepop=423394
-# )
-# slavedf<-rbind.fill(newrow,slavedf)
-# slavedf<-slavedf[,c('year','slavepop')]
-# slavedf$slavepop <- str_replace_all(slavedf$slavepop,"\\,","") %>%
-#   as.numeric
-# #fill in the intervening years
-# tmpyears<-c(1776:1860)
-# newrows<-data.frame(
-#   year=tmpyears[!tmpyears%in%slavedf$year],
-#   slavepop=NA
-# )
-# slavedf <- rbind.fill(
-#   slavedf,
-#   newrows
-# )
-# slavedf <- slavedf[order(slavedf$year),]
-# slavedf$slavepop <- na.approx(slavedf$slavepop,na.rm=F)
-# slavedf$slavepop_wage <- slavedf$slavepop *
-#   (1 - 0.1669) #craemer (2015) says 16.69% are below 5 years of age
 
 #interest rates, as earning asssets for banks
 #https://www.nber.org/system/files/chapters/c6961/c6961.pdf
@@ -194,7 +167,7 @@ irdf$rate<-na.locf(irdf$rate,na.rm=F) #this can be improved w/ new data
 irdf$year<-as.numeric(irdf$year)
 mean(irdf$rate[irdf$year%in%1776:1860])
 
-#as an alternative, consider the coupon rate of all treasury bonds
+#as our 'prudent man' alternative, consider the coupon rate of all treasury bonds
 #https://github.com/jepayne/US-Federal-Debt-Public/blob/master/Industrial-Suite/DataFrames/BondList.csv
 setwd(datadir); dir()
 couponsdf<-fread('BondList.csv')
@@ -258,7 +231,7 @@ ratesdf<-merge(
 ratesdf$rate[!is.na(ratesdf$rate2)]<-ratesdf$rate2[!is.na(ratesdf$rate2)]
 ratesdf$rate2<-NULL
 
-#for both irdf and ratesdf, we take historic data from the BoE paper
+#for both irdf and ratesdf, we take historic rates (pre 1776) from the BoE paper
 #https://www.bankofengland.co.uk/working-paper/2020/eight-centuries-of-global-real-interest-rates-r-g-and-the-suprasecular-decline-1311-2018
 setwd(datadir); dir()
 hratesdf<-fread('bankofengland.csv',skip=1)
@@ -266,6 +239,14 @@ hratesdf<-hratesdf[6:nrow(hratesdf),c(1,11)]#,14,22)]
 names(hratesdf)<-c('year','rate')#,'rate_safe','rate_private')
 hratesdf<-lapply(hratesdf,as.numeric) %>% as.data.frame
 hratesdf<-hratesdf[!is.na(hratesdf$year) & !is.na(hratesdf$rate),]
+#some summary stats
+mean(hratesdf$rate)
+mean(hratesdf$rate[hratesdf$year%in%1619:1776]) #6%
+mean(hratesdf$rate[hratesdf$year%in%1777:1865]) #6%
+mean(ratesdf$rate[ratesdf$year%in%1619:1865]) #5.7%
+mean(ratesdf$rate[ratesdf$year%in%1777:1865])
+
+#put everything togetehr
 ratesdf<-rbind.fill(
   hratesdf[hratesdf$year%in%(min(hratesdf$year):min(ratesdf$year)),],
   ratesdf
@@ -275,27 +256,23 @@ irdf<-rbind.fill(
   irdf
 )
 
-mean(hratesdf$rate)
-mean(hratesdf$rate[hratesdf$year%in%1619:1776]) #6%
-mean(hratesdf$rate[hratesdf$year%in%1777:1865]) #6%
-
-mean(ratesdf$rate[ratesdf$year%in%1619:1865]) #5.7%
-
 ########################################################
 ########################################################
 
-#REDO CRAEMER
+#CALCULATE THE REPARTAIONS BILL
 
 expand.grid.df <- function(...) Reduce(function(...) merge(..., by=NULL), list(...))
 
+#this loops through the various permutations
 loopdf<-expand.grid(
-  slavepop=c('over5','everyone'),
-  workingday=c(12,24),
-  startyear=c(1619,1776),
-  presentyear=c(1865,2009,2023),
-  rateofinterest=c('craemer','shiller','treasury')
+  slavepop=c('over5','everyone'), #count over5 or everyone?
+  workingday=c(12,24), #how long is the working day?
+  startyear=c(1619,1776), #to when do we date the bill?
+  presentyear=c(1865,2009,2023), #for how long does the bill compound?
+  rateofinterest=c('craemer','shiller','treasury') #which interest rate?
 )
 
+#if we want to trim it
 # tmp<-loopdf$slavepop=='everyone' &
 #   loopdf$workingday==24 & 
 #   loopdf$startyear==1619 & 
@@ -325,6 +302,7 @@ loopdf<-expand.grid(
 #   loopdf$presentyear==2009
 # loopdf<-loopdf[tmp,]
 
+#loops through the permutations and performs calculations
 loopdf$i<-1:nrow(loopdf)
 loopdf$reparations_bill <- sapply(loopdf$i,function(i) {
   
@@ -353,7 +331,7 @@ loopdf$reparations_bill <- sapply(loopdf$i,function(i) {
   }) %>% rbind.fill %>% data.table
   
   #each unpaid wage bill is invested at a rate of interest
-  #which compounds until the present
+  #which compounds until the relevant date
   tmpdf2 <- lapply(1:nrow(tmpdf),function(j) {
     #j<-1
     #thisrow$rateofinterest<-'creamer'
@@ -367,7 +345,7 @@ loopdf$reparations_bill <- sapply(loopdf$i,function(i) {
       mytotal <- tmpdf$wagebill[j] * ((1 + 0.03) ^ years_to_prez)
       mytotal
       
-      #or we use best guess, which is a variable rate of interest
+      #or we use a variable rate of interest
       #based on the average rate of interest in each year, carried forward
       #until the year before the present year
     } else if (thisrow$rateofinterest=='shiller') {
@@ -377,6 +355,9 @@ loopdf$reparations_bill <- sapply(loopdf$i,function(i) {
       for(k in 1:length(thesers)) {
         mytotal <- mytotal * (1 + thesers[k]/100)
       }
+      
+      #or we use the 'prudent man' rule, who invests
+      #assets in government/sovereign bonds
     } else if (thisrow$rateofinterest=='treasury') {
       
       thesers<-ratesdf$rate[ratesdf$year%in%tmpdf$year[j]:(thisrow$presentyear-1)]
@@ -398,18 +379,20 @@ loopdf$reparations_bill <- sapply(loopdf$i,function(i) {
   
 })
 
-#put this in billions
+#put the total bill in billions, so it is easier to read
 loopdf$reparations_bill <- loopdf$reparations_bill/10^9
-loopdf
 
 ########################################################
 ########################################################
+
+#what does this bill come to as a measure of total wealth?
 
 #p. 9, https://www2.census.gov/library/publications/1949/compendia/hist_stats_1789-1945/hist_stats_1789-1945-chA.pdf
 #in 1860, estimated national wealth was  
-natwealth_1860 <- 17.013 * 10^9 #lower than PZ estimate below.. 
-natwealth_2023 <- 100 * 10^12
-(natwealth_2023/natwealth_1860)^(1/163) - 1 #5.4%
+natwealth_1860 <- 17.013 * 10^9 #note that this is lower than PZ estimate below.. 
+#https://www.cnn.com/2023/06/08/economy/household-wealth-net-worth/index.html#:~:text=Americans'%20wealth%20rises%20by%20%243%20trillion%20but%20remains%20below%20early%202022%20peak&text=Elevated%20by%20a%20strong%20stock,shy%20of%20its%20recent%20peak.
+natwealth_2023 <- 149 * 10^12
+(natwealth_2023/natwealth_1860)^(1/163) - 1 #5.7%
 
 #https://www.measuringworth.com/slavery.php
 #in 1860, estimated non-slave wealth in the South was
@@ -428,7 +411,7 @@ thisrow$reparations_bill
 (thisrow$reparations_bill)*10^9/natwealth_1860
 (thisrow$reparations_bill)*10^9/nonslavewealth_1860
 
-#at shiier's rates
+#at shiller's rates
 thisrow<-loopdf[
   loopdf$slavepop=='everyone' & 
     loopdf$workingday=='24' & 
@@ -454,6 +437,7 @@ thisrow$reparations_bill
 (thisrow$reparations_bill)*10^9/natwealth_1860
 (thisrow$reparations_bill)*10^9/nonslavewealth_1860
 
+#at craemer's rates
 thisrow<-loopdf[
   loopdf$slavepop=='everyone' & 
     loopdf$workingday=='24' & 
@@ -465,6 +449,17 @@ thisrow<-loopdf[
 thisrow$reparations_bill
 (thisrow$reparations_bill)*10^9/natwealth_1860
 (thisrow$reparations_bill)*10^9/nonslavewealth_1860
+
+#and how big is the bill today?
+thisrow<-loopdf[
+  loopdf$slavepop=='everyone' & 
+    loopdf$workingday=='24' & 
+    loopdf$rateofinterest=='treasury' &
+    loopdf$startyear==1619 & 
+    loopdf$presentyear==2023
+  ,
+]
+thisrow$reparations_bill*10^9/natwealth_2023
 
 ########################################################
 ########################################################
@@ -491,7 +486,7 @@ worldgdp_1865 <- tmpdf$gdp[tmpdf$year==1865] #1.8 trillion in 2011 dollars
 #using wealth-income ratios from around the world today, we estimate world wealth
 worldwealth_1865 <- worldgdp_1865 * 4.5 #https://www-degruyter-com.ezp-prod1.hul.harvard.edu/document/doi/10.4159/9780674984769-017/html
 
-#put both in 1860 dollars using shiller's cpi
+#put both in 1865 dollars using shiller's cpi
 setwd(datadir); dir()
 tmpdf<-fread('shiller_irate.csv')
 tmpdf<-tmpdf[9:nrow(tmpdf),c(1,7)]
@@ -500,13 +495,15 @@ tmpdf<-tmpdf[tmpdf$year!="" & tmpdf$cpi!="",]
 tmpdf$cpi<-as.numeric(tmpdf$cpi)
 #to put 2011 dollars in 187X terms, divide by deflator
 deflator_1871<-tmpdf$cpi[tmpdf$year==2011]/
-  tmpdf$cpi[tmpdf$year==1871] #closest we get to 1860
+  tmpdf$cpi[tmpdf$year==1871] #closest we get to 1865
 worldgdp_1865 <- worldgdp_1865/deflator_1871
 worldwealth_1865 <- worldwealth_1865/deflator_1871
 
+#in billions
 worldgdp_1865/10^9
 worldwealth_1865/10^9
 
+#make the calculations
 thisrow<-loopdf[
   loopdf$slavepop=='everyone' & 
     loopdf$workingday=='24' & 
@@ -517,18 +514,6 @@ thisrow<-loopdf[
 ]
 (thisrow$reparations_bill)*10^9/worldwealth_1865
 (thisrow$reparations_bill)*10^9/worldgdp_1865
-
-#and today?
-thisrow<-loopdf[
-  loopdf$slavepop=='everyone' & 
-    loopdf$workingday=='24' & 
-    loopdf$rateofinterest=='treasury' &
-    loopdf$startyear==1619 & 
-    loopdf$presentyear==2023
-  ,
-]
-thisrow$reparations_bill
-
 
 ########################################################
 ########################################################
@@ -556,6 +541,33 @@ y0<-pzdf$wealth[pzdf$year==1770]
 t<-2010-1770
 100 * ((yf/y0)^(1/t) - 1) #grows at about 5.1%
 
+#note that since average of rates on 'prudent man' rule are a little lower than this
+mean(ratesdf$rate[ratesdf$year%in%1770:2010]) #about 4.8%
+#the taint will eventually tend to zero, as a proportion of wealth stock
+#how long would this take? 
+taint<-10
+wealth<-taint/(loopdf[
+    loopdf$slavepop=='everyone' & 
+      loopdf$workingday=='24' & 
+      loopdf$rateofinterest=='treasury' &
+      loopdf$startyear==1619 & 
+      loopdf$presentyear==2023
+    ,
+    'reparations_bill'
+  ] * 10^9 / natwealth_2023
+)
+taint_gr <- mean(ratesdf$rate[ratesdf$year%in%1770:2010])
+wealth_gr <- 100 * ((yf/y0)^(1/t) - 1) #grows at about 5.1%
+tmpdf<-lapply(1:5000,function(x) {
+  data.frame(
+    year=x,
+    taint=taint * (1 + taint_gr/100)^x,
+    wealth=wealth * (1 + wealth_gr/100)^x
+  )
+}) %>% rbind.fill
+tmpdf$wealthbigger <- as.numeric(tmpdf$wealth>tmpdf$taint)
+min(tmpdf$year[tmpdf$wealthbigger==1]) #it takes almost 1,000 years
+
 yf<-pzdf$wealth[pzdf$year==1860]
 y0<-pzdf$wealth[pzdf$year==1770]
 t<-1860-1770
@@ -579,20 +591,139 @@ t<-2010-1770
 #it will not outgrow the economy, 
 #unless we choose a higher interest rate
 
-# #what does world gdp grow at?
-# setwd(datadir); dir()
-# tmpdf<-fread('world-gdp-over-the-last-two-millennia.csv')
-# names(tmpdf)<-c('countryname','code','year','gdp')
-# tmpyears <- min(tmpdf$year):max(tmpdf$year)
+########################################################
+########################################################
+
+#how well would Social Democracy vindicate the property rights of ex-slaves?
+
+#us economy
+usgdp_2022  <- 25462.70 * 10^9 #https://tradingeconomics.com/united-states/gdp
+kworthy <- 0.10 #kenworthy 2014, p. 72
+
+#https://www.usgovernmentspending.com/ 
+welfare<- 1743 * 10^9
+socialsecurity <- 1219 * 10^9
+medicare <- 755 * 10^9
+medicaid <- 835 * 10^9
+socialspending <- 
+  welfare + 
+  socialsecurity + 
+  medicare + 
+  medicaid
+socialspending/usgdp_2022 #aobut 18% of GDP
+
+#https://usafacts.org/data/topics/people-society/population-and-demographics/population-data/households/
+ushh_2022 <- 131.202 * 10^6
+ushh_black_2022 <- 17.698 * 10^6
+
+#reparations bills
+reparations_radical<-loopdf[
+  loopdf$slavepop=='everyone' & 
+    loopdf$workingday=='24' & 
+    loopdf$rateofinterest=='treasury' &
+    loopdf$startyear==1619 &
+    loopdf$presentyear==2023
+  ,
+  'reparations_bill'
+] * 10^9
+#https://www.rand.org/blog/rand-review/2023/05/what-would-it-take-to-close-americas-black-white-wealth-gap.html#:~:text=The%20median%20wealth%20gap%20in,%2415%20trillion%20to%20eliminate%20it.
+reparations_moderate<-15000 * 10^9
+
+#calculations
+#how much more needed to bring social democracy?
+kworthy * usgdp_2022 #2.5 trilliion
+#current redistribution
+socialspending/ushh_2022 #35,000
+#with the increase
+(socialspending + kworthy*usgdp_2022)/ushh_2022 #55,000
+#how much is each black household owed?
+reparations_radical/ushh_black_2022 #78 million
+(reparations_radical/ushh_black_2022) * .05 #earns about this in interest
+
+#if we count social democracy as partial reparations, 
+#how much of the debt of slavery is unpaid?
+
+#social spending over time
+setwd(datadir); dir()
+tmpdf<-fread('social-spending-oecd-longrun.csv')
+names(tmpdf)<-c('countryname','code','year','socialspending')
+tmpdf<-tmpdf[countryname=='United States',c('year','socialspending')]
+tmpdf<-rbind.fill(
+  tmpdf,
+  data.frame(
+    year=2022,
+    #not likely to be exactly equivalent, but this is hardly going to be important
+    socialspending=c(100 * socialspending/usgdp_2022
+    )
+  )
+)
+tmpyears<-1865:2022
+tmpdf2<-data.frame(
+  year=tmpyears[!tmpyears%in%tmpdf$year],
+  socialspending=NA
+)
+tmpdf<-rbind.fill(
+  tmpdf,
+  tmpdf2
+)
+tmpdf<-tmpdf[order(tmpdf$year),]
+tmpdf$socialspending <- na.approx(tmpdf$socialspending,na.rm=F)/100
+tmpdf$socialspending <- na.locf(tmpdf$socialspending,fromLast = T)
+ssdf<-tmpdf
+
+#us nominal gdp over time
+setwd(datadir); dir()
+tmpdf<-fread('nominalgdp.csv')
+tmpdf<-tmpdf[countryname=='United States of America',c('year','value')]
+names(tmpdf)<-c('year','nominalgdp')
+gdpdf<-tmpdf
+
+#us population over time
+setwd(datadir); dir()
+tmpdf<-fread('maddison.csv')
+tmpdf<-tmpdf[countryname=='United States' & statistic=='population',c('year','value')]
+names(tmpdf)<-c('year','population')
+popdf<-tmpdf
+
+#this means, per capita social spending in USA was roughly:
+tmpdf<-merge(
+  ssdf,
+  gdpdf,
+  by='year'
+)
+tmpdf<-merge(
+  tmpdf,
+  popdf,
+  by='year'
+)
+tmpdf$nomgdp_percapita <- tmpdf$nominalgdp/tmpdf$population
+tmpdf$socialspending_percapita <- tmpdf$socialspending * tmpdf$nomgdp_percapita
+
+#as a percentage of the reparations bill, this is minisicule
+#in 1865:
+reparations_radical<-loopdf[
+  loopdf$slavepop=='everyone' & 
+    loopdf$workingday=='24' & 
+    loopdf$rateofinterest=='treasury' &
+    loopdf$startyear==1619 &
+    loopdf$presentyear==1865
+  ,
+  'reparations_bill'
+] * 10^9
+repbill<-reparations_radical/(4.4 * 10^6) #black people were owed about 300,000 per person,
+ssgiven<-tmpdf$socialspending_percapita[tmpdf$year==1865] #was about 50 cents per person!
+100 * ssgiven/(repbill * .05) 
 
 ########################################################
 ########################################################
 
+#germany reparations to israel
+#between 1952 and 1966
+reparations_sum <- 3 * 10^9
+#w german gdp at this time
+setwd(datadir); dir()
+tmpdf<-fread('nominalgdp.csv')
+tmpdf<-tmpdf[countryname=='West Germany' & year%in%1952:1965,c('year','value')]
+1/(((reparations_sum))/sum(tmpdf$value)) #1/1248th of national product
 
-
-
-
-
-
-
-
+   
