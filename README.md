@@ -1,6 +1,6 @@
-# Reparations for Slavery and the Libertarian Case for Social Democracy
+# The Libertarian Case Against Property
 
-This repository contains the code that performs all calculations for 'Reparations for Slavery and the Libertarian Case for Social Democracy', by Chris Lewis and Adaner Usmani. 
+This repository contains the code that performs all calculations for 'The Libertarian Case Against Property', by Chris Lewis and Adaner Usmani. 
 
 To replicate our results, you will need to: 
 
