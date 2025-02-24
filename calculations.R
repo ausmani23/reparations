@@ -726,4 +726,17 @@ tmpdf<-fread('nominalgdp.csv')
 tmpdf<-tmpdf[countryname=='West Germany' & year%in%1952:1965,c('year','value')]
 1/(((reparations_sum))/sum(tmpdf$value)) #1/1248th of national product
 
-   
+########################################################
+########################################################
+
+#how large if we look at ancient injustice?
+income<-100 #~https://delong.typepad.com/print/20061012_LRWGDP.pdf
+discountrate <- 0.05 #using very high discount rate
+assetvalue<-100/discountrate
+bill <- assetvalue * ((1+discountrate)^10500)
+
+#global economy today
+globalwealth <- 454.4 * 10^12
+bill/globalwealth
+
+
